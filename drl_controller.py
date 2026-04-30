@@ -50,7 +50,7 @@ def write_status(stage, message, rows=None):
 
 def save_evaluation_plot(record_pm25, record_tsp, record_action):
     if not record_pm25 or not record_tsp or not record_action:
-        print("⚠️ 暂无 DRL 控制记录，未生成评价图。")
+        print("暂无 DRL 控制记录，未生成评价图。")
         return
 
     plt.figure(figsize=(14, 8))
@@ -73,7 +73,7 @@ def save_evaluation_plot(record_pm25, record_tsp, record_action):
     plt.tight_layout()
     plt.savefig(EVALUATION_PLOT_FILE, dpi=300)
     plt.close()
-    print(f"✅ 评价图已生成: {EVALUATION_PLOT_FILE}")
+    print(f"评价图已生成: {EVALUATION_PLOT_FILE}")
 
 
 class Attention(Layer):
@@ -195,7 +195,6 @@ def main():
     features = ['PM2.5', 'PM10', 'TSP', 'has_dust_source']
     data = df[features].apply(pd.to_numeric, errors='coerce').interpolate().bfill().ffill().values
 
-    # 修复 Bug 2: 严格按照 attention-lstm1.py 的方式拟合 StandardScaler
     scaler_X = StandardScaler().fit(data)
     scaler_y = StandardScaler().fit(data[:, 0:3])
 
@@ -233,75 +232,58 @@ def main():
                 current_state_raw = np.array([[actual_pm25, actual_pm10, actual_tsp, predicted_pm25, current_cannon_status]])
                 current_state = scale_state(current_state_raw)
 
-                # --- 2. 计算【上一秒动作】的奖励 ---
                 if prev_state is not None:
                     reward = 0
                     is_safe = (actual_pm25 <= PM25_SAFE_THRESHOLD) and (actual_tsp <= TSP_SAFE_THRESHOLD)
-                    # A. 达标判定
                     if is_safe:
-                        reward += 10.0  # 基础生存奖
+                        reward += 10.0
 
-                        # 省水
                         if prev_action == 0:
                             if actual_pm25 < (PM25_SAFE_THRESHOLD * 0.6):
                                 reward += 25.0
                             else:
                                 reward += 10.0
                         else:
-                            reward -= 15.0  # 安全还开水，重罚！
+                            reward -= 15.0
                     else:
-                        #  超标惩罚
                         penalty_pm = (actual_pm25 - PM25_SAFE_THRESHOLD) * 5.0
                         penalty_tsp = (actual_tsp - TSP_SAFE_THRESHOLD) * 2.0  # TSP 权重稍微调低，因为数值基数大
                         reward = - max(penalty_pm, penalty_tsp)
 
-                        # 补偿性奖励
                         if prev_action == 1:
                             reward += 5.0
 
-                            # E. 预判性奖励
                     prev_actual = prev_state[0][0] * 300.0
                     if predicted_pm25 > PM25_SAFE_THRESHOLD and prev_action == 1:
-                        reward += 10.0  # 奖励它看预测行事
+                        reward += 10.0
 
                     agent.remember(prev_state, prev_action, reward, current_state, False)
                     agent.replay()
 
-                    # --- 4. 做出决策 ---
                 action = agent.act(current_state)
 
                 now = time.time()
                 if action != current_cannon_status:
                     if (now - last_switch_time) >= MIN_SWITCH_INTERVAL:
-                        # 满足 1 分钟间隔，允许切换
                         final_action = action
                         last_switch_time = now
                         # print(f" [保护机制] 满足间隔，允许切换为: {final_action}")
                     else:
-                        # 不满足间隔，强制维持原状
                         final_action = current_cannon_status
                         # print(f" [保护机制] 间隔不足，拦截切换请求")
                 else:
-                    # 动作没变，维持原状
                     final_action = current_cannon_status
 
-                # 【新增】动作切换惩罚逻辑 (放在这里更准确)
-                # 如果当前动作和上一秒动作不一样，为了设备寿命，扣一点分
                 if prev_action is not None and action != prev_action:
-                    # 只有在记忆库里反映这一秒的代价
-                    # 也可以直接加在上面的 reward 里
                     pass
 
-                # 写入指令
                 with open(COMMAND_FILE, "w") as f:
                     f.write(str(final_action))
 
-                    # 记录数据
                     record_pm25.append(actual_pm25)
                     record_tsp.append(actual_tsp)
                     record_action.append(final_action)
 
-                    # 打印增强日志
                     status_text = "🟢 开" if final_action == 1 else "⚪ 关"
                     print(
                         f"PM2.5: {actual_pm25:.1f} | TSP: {actual_tsp:.1f} | 预测PM2.5: {predicted_pm25:.1f} | 决策: {status_text} | ε: {agent.epsilon:.2f}")

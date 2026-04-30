@@ -35,13 +35,11 @@ current_pm25, current_pm10, current_tsp = 15.0, 25.0, 40.0
 is_currently_dusty = False
 
 
-# --- 1. 模拟传感器物理线程 (核心逻辑) ---
 def mock_sensor_thread():
     global current_pm25, current_pm10, current_tsp, is_currently_dusty
     base_pm25 = 15.0
 
     while True:
-        # A. 读取主控指令
         cannon_on = False
         if os.path.exists(COMMAND_FILE):
             try:
@@ -51,40 +49,31 @@ def mock_sensor_thread():
             except:
                 pass
 
-        # B. 确定目标浓度 (Target)
         if cannon_on:
-            # 【关键】：只要开启喷淋，目标值强制设为安全区 (25-45)
             target_pm25 = np.random.uniform(25, 45)
-            alpha = 0.4  # 下降速度快
+            alpha = 0.4
         elif is_currently_dusty:
-            # 有尘源且没开喷淋，目标值飙升
             target_pm25 = np.random.uniform(180, 280)
-            alpha = 0.15  # 上升速度中等
+            alpha = 0.15
         else:
-            # 环境干净且没开喷淋，回归基准
             target_pm25 = base_pm25
             alpha = 0.2
 
-        # C. 一阶惯性滤波 (模拟数值平滑变化)
         current_pm25 += (target_pm25 - current_pm25) * alpha
 
-        # D. 联动计算 PM10 和 TSP (符合物理相关性)
         current_pm10 = current_pm25 * 1.6 + np.random.normal(0, 2)
         current_tsp = current_pm25 * 3.2 + np.random.normal(0, 5)
 
-        # E. 叠加微小噪声并进行边界限制
         current_pm25 = np.clip(current_pm25 + np.random.normal(0, 0.5), 5, 600)
         current_pm10 = np.clip(current_pm10, 10, 900)
         current_tsp = np.clip(current_tsp, 20, 1500)
 
-        time.sleep(1)  # 物理引擎每秒计算一次
+        time.sleep(1)
 
 
-# 启动模拟线程
 threading.Thread(target=mock_sensor_thread, daemon=True).start()
 
 
-# --- 2. 绘图与分析功能 ---
 def save_analysis_plot():
     if not os.path.exists(CSV_FILE): return
     try:
@@ -106,23 +95,20 @@ def save_analysis_plot():
         print(f"生成图表失败: {e}")
 
 
-# --- 3. 主程序 (视频处理与数据采集) ---
 def main():
     global is_currently_dusty, current_pm25, current_pm10, current_tsp
 
-    print("🚀 视频采集与环境模拟器已启动...")
+    print("视频采集与环境模拟器已启动...")
 
-    # 初始化CSV文件
     with open(CSV_FILE, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['timestamp', 'PM2.5', 'PM10', 'TSP', 'has_dust_source'])
 
     cap = cv2.VideoCapture(VIDEO_PATH)
     if not cap.isOpened():
-        print(f"❌ 无法打开视频文件: {VIDEO_PATH}")
+        print(f"无法打开视频文件: {VIDEO_PATH}")
         return
 
-    # 确定尘源类别
     dust_source_ids = [k for k, v in model.names.items() if
                        any(x in v.lower() for x in ['dust', 'dumping', 'excavation', 'truck', 'person'])]
 
@@ -138,8 +124,7 @@ def main():
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # 视频循环播放
                 continue
 
-            # --- A. 视觉检测算法 ---
-            # 1. YOLO 检测
+            # YOLO 检测
             results = model(frame, verbose=False)[0]
             yolo_detected = False
             for box in results.boxes:
@@ -150,12 +135,12 @@ def main():
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
 
-            # 2. HSV 颜色过滤
+            # HSV 颜色过滤
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             mask = cv2.inRange(hsv, (0, 0, 150), (180, 50, 255))
             dust_ratio = cv2.countNonZero(mask) / (mask.size + 1e-6)
 
-            # 3. 运动检测
+            # 运动检测
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             motion = 0
             if prev_gray is not None:
@@ -167,7 +152,6 @@ def main():
             # 综合逻辑判断
             is_currently_dusty = yolo_detected or (dust_ratio > 0.02 and motion > 0.01)
 
-            # --- B. 数据持久化 (每 0.5 秒记录一次，提升学习频率) ---
             curr_t = time.time()
             if curr_t - last_record_time >= 0.5:
                 elapsed = int(curr_t - start_time)
@@ -181,7 +165,6 @@ def main():
                     ])
                 last_record_time = curr_t
 
-            # --- C. UI 实时显示 ---
             color = (0, 0, 255) if is_currently_dusty else (0, 255, 0)
             status_txt = "EVENT: DUSTY" if is_currently_dusty else "EVENT: CLEAN"
 
@@ -189,7 +172,6 @@ def main():
             cv2.putText(frame, f"PM2.5: {current_pm25:.1f}  TSP: {current_tsp:.1f}", (20, 100),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
-            # 显示调试信息
             debug_info = f"YOLO: {yolo_detected} | Color: {dust_ratio:.3f} | Motion: {motion:.3f}"
             cv2.putText(frame, debug_info, (20, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 

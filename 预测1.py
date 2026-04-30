@@ -22,41 +22,28 @@ ATTENTION_HEATMAP_FILE = os.path.join(OUTPUT_DIR, "attention_heatmap.png")
 
 
 # 1. Attention 层定义
-# 升级版的 Attention 层 (Bahdanau 风格)
 class Attention(Layer):
     def __init__(self, **kwargs):
         super(Attention, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        # input_shape = (batch_size, time_steps, features)
-        # 1. 权重矩阵 W，用于转换输入特征
         self.W = self.add_weight(shape=(input_shape[-1], input_shape[-1]),
                                  initializer="glorot_uniform", trainable=True, name="Att_W")
-        # 2. 偏置 b
         self.b = self.add_weight(shape=(input_shape[-1],),
                                  initializer="zeros", trainable=True, name="Att_b")
-        # 3. 核心改进：上下文向量 u，用于把 64 维特征压缩成 1 个单一的分数！
         self.u = self.add_weight(shape=(input_shape[-1], 1),
                                  initializer="glorot_uniform", trainable=True, name="Att_u")
         super(Attention, self).build(input_shape)
 
     def call(self, x):
-        # x 形状: (batch, 20, 64)
-        # 第一步：特征非线性变换
         uit = tf.nn.tanh(tf.tensordot(x, self.W, axes=1) + self.b)
 
-        # 第二步：将 64 维特征压缩成 1 个标量分数
-        # 形状变为: (batch, 20, 1)
         score = tf.tensordot(uit, self.u, axes=1)
 
-        # 把多余的维度挤掉，形状变为: (batch, 20)
         score = tf.squeeze(score, -1)
 
-        # 第三步：计算概率权重 (加起来等于 1)
         weights = tf.nn.softmax(score, axis=1)
 
-        # 第四步：加权求和
-        # 扩展 weights 形状使其能与 x 相乘: (batch, 20, 1)
         weights_expanded = tf.expand_dims(weights, -1)
         context_vector = tf.reduce_sum(weights_expanded * x, axis=1)
 
@@ -99,8 +86,6 @@ lstm_out = Bidirectional(LSTM(128, return_sequences=True))(input_layer)
 lstm_out = Dropout(0.2)(lstm_out)
 lstm_out = LSTM(64, return_sequences=True)(lstm_out)
 
-# --- 修改点 1：捕获 Attention 权重 ---
-# 以前是 context_vector, _ = ... 现在把权重赋值给 attn_weights
 context_vector, attn_weights = Attention()(lstm_out)
 
 x = Dense(128, activation='relu')(context_vector)
@@ -124,9 +109,7 @@ history = model.fit(
     verbose=1
 )
 
-# ==========================================
-# 5. 预测与评估绘图
-# ==========================================
+# 4. 预测与评估绘图
 y_pred_scaled = model.predict(X_test_scaled)
 y_pred = scaler_y.inverse_transform(y_pred_scaled)
 y_true = y_test
@@ -155,23 +138,17 @@ model.save(MODEL_FILE)
 print(f"训练结束，主预测模型已保存: {MODEL_FILE}")
 
 
-# ==========================================
-# 6. 生成 Attention Heatmap (热力图)
-# ==========================================
+# 5. 生成 Attention Heatmap (热力图)
 print("⏳ 正在生成 Attention Heatmap...")
 
-# 构建专门输出权重的子模型
 attention_model = Model(inputs=input_layer, outputs=attn_weights)
 
-# 选取测试集的前 30 个样本
 num_samples_to_plot = min(30, len(X_test_scaled))
 sample_inputs = X_test_scaled[:num_samples_to_plot]
 
-# 直接预测出二维的注意力权重，形状为 (30, 20)
 attention_scores = attention_model.predict(sample_inputs)
 
 plt.figure(figsize=(12, 8))
-# cmap='viridis' 是深色到亮黄色的渐变，适合展示权重高低
 plt.imshow(attention_scores, cmap='viridis', aspect='auto')
 
 plt.colorbar(label='Attention Weight (Probability)')
