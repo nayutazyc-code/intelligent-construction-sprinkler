@@ -265,7 +265,7 @@ def main():
 
                 # 写入指令
                 with open(COMMAND_FILE, "w") as f:
-                    f.write(str(action))
+                    f.write(str(final_action))
 
                     # 记录数据
                     record_pm25.append(actual_pm25)

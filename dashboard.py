@@ -19,7 +19,7 @@ MIN_DATA_ROWS = 800
 def render_dashboard():
     st.set_page_config(page_title="智慧工地 AI 抑尘系统", layout="wide")
 
-    st.title("🏗️ 智慧工地：基于 DRL + LSTM 的抑尘自主控制云平台")
+    st.title("智慧工地：基于 DRL + LSTM 的抑尘自主控制云平台")
 
     st.sidebar.header("系统状态")
     phase_placeholder = st.sidebar.empty()
@@ -32,11 +32,11 @@ def render_dashboard():
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        st.subheader("📸 实时 AI 监控画面")
+        st.subheader("实时 AI 监控画面")
         video_placeholder = st.empty()
 
     with col2:
-        st.subheader("📈 指数实时动态")
+        st.subheader("指数实时动态")
         chart_placeholder = st.empty()
 
     stage_placeholder = st.empty()
@@ -106,7 +106,7 @@ def render_dashboard():
             latest = df.iloc[-1]
 
             if stage == "control":
-                status_color = "🔴 喷淋开启" if cmd == "1" else "⚪ 系统待机"
+                status_color = "🟢 喷淋开启" if cmd == "1" else "⚪ 系统待机"
                 status_placeholder.markdown(f"### 当前状态: **{status_color}**")
             pm25_metric.metric("当前 PM2.5", f"{latest['PM2.5']} μg/m³")
             pm10_metric.metric("当前 PM10", f"{latest['PM10']} μg/m³")
