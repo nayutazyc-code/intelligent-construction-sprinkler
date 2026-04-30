@@ -47,6 +47,35 @@ def write_status(stage, message, rows=None):
         json.dump(payload, f, ensure_ascii=False)
     os.replace(temp_path, STATUS_FILE)
 
+
+def save_evaluation_plot(record_pm25, record_tsp, record_action):
+    if not record_pm25 or not record_tsp or not record_action:
+        print("⚠️ 暂无 DRL 控制记录，未生成评价图。")
+        return
+
+    plt.figure(figsize=(14, 8))
+    time_axis = range(len(record_pm25))
+
+    plt.subplot(2, 1, 1)
+    plt.plot(time_axis, record_pm25, color='#e74c3c', label='Actual PM2.5')
+    plt.axhline(y=PM25_SAFE_THRESHOLD, color='green', linestyle='--', label='Threshold')
+    plt.fill_between(time_axis, 0, max(record_pm25) + 10, where=(np.array(record_action) == 1),
+                     color='#3498db', alpha=0.2, label='Spraying')
+    plt.ylabel("PM2.5"), plt.legend(), plt.grid(True, alpha=0.3)
+
+    plt.subplot(2, 1, 2)
+    plt.plot(time_axis, record_tsp, color='#8e44ad', label='Actual TSP')
+    plt.axhline(y=TSP_SAFE_THRESHOLD, color='orange', linestyle='--', label='TSP Limit')
+    plt.fill_between(time_axis, 0, max(record_tsp) + 10, where=(np.array(record_action) == 1),
+                     color='#3498db', alpha=0.2)
+    plt.ylabel("TSP"), plt.xlabel("Time Steps"), plt.legend(), plt.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(EVALUATION_PLOT_FILE, dpi=300)
+    plt.close()
+    print(f"✅ 评价图已生成: {EVALUATION_PLOT_FILE}")
+
+
 class Attention(Layer):
     def __init__(self, **kwargs):
         super(Attention, self).__init__(**kwargs)
@@ -284,34 +313,14 @@ def main():
                 time.sleep(0.5)
 
     except KeyboardInterrupt:
-        print("\n\n⚠️ 正在生成多指标评价报告...")
+        print("\n\n⚠️ 正在停止 DRL 控制系统...")
+    finally:
         write_status("stopped", "系统已停止，正在生成运行评价报告。", rows=get_data_length())
-        collector_proc.kill()
+        if collector_proc.poll() is None:
+            collector_proc.kill()
         with open(COMMAND_FILE, "w") as f:
             f.write("0")
-
-        plt.figure(figsize=(14, 8))
-        time_axis = range(len(record_pm25))
-
-        # 子图 1: PM2.5 曲线
-        plt.subplot(2, 1, 1)
-        plt.plot(time_axis, record_pm25, color='#e74c3c', label='Actual PM2.5')
-        plt.axhline(y=PM25_SAFE_THRESHOLD, color='green', linestyle='--', label='Threshold')
-        plt.fill_between(time_axis, 0, max(record_pm25) + 10, where=(np.array(record_action) == 1),
-                                 color='#3498db', alpha=0.2, label='Spraying')
-        plt.ylabel("PM2.5"), plt.legend(), plt.grid(True, alpha=0.3)
-
-        # 子图 2: TSP 曲线
-        plt.subplot(2, 1, 2)
-        plt.plot(time_axis, record_tsp, color='#8e44ad', label='Actual TSP')
-        plt.axhline(y=TSP_SAFE_THRESHOLD, color='orange', linestyle='--', label='TSP Limit')
-        plt.fill_between(time_axis, 0, max(record_tsp) + 10, where=(np.array(record_action) == 1),
-                                 color='#3498db', alpha=0.2)
-        plt.ylabel("TSP"), plt.xlabel("Time Steps"), plt.legend(), plt.grid(True, alpha=0.3)
-
-        plt.tight_layout()
-        plt.savefig(EVALUATION_PLOT_FILE, dpi=300)
-        print(f"✅ 评价图已生成: {EVALUATION_PLOT_FILE}")
+        save_evaluation_plot(record_pm25, record_tsp, record_action)
 
 if __name__ == "__main__":
     main()
