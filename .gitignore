@@ -1,0 +1,25 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime data
+dust_dataset.csv
+cannon_command.txt
+latest_frame.jpg
+latest_frame.jpg.tmp.jpg
+
+# Generated models and reports
+dust_attention_lstm_model.keras
+optimized_prediction.png
+attention_heatmap.png
+analysis_result.png
+drl_multi_metrics_evaluation.png
+
+# Editor files
+.idea/
+.vscode/
