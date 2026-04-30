@@ -36,17 +36,7 @@ def launch_system():
 
     drl_proc = subprocess.Popen([sys.executable, DRL_SCRIPT], cwd=BASE_DIR)
 
-    print(f"[2] 等待数据采集完成: 0/{MIN_DATA_ROWS} 行")
-    while get_data_length() < MIN_DATA_ROWS:
-        if drl_proc.poll() is not None:
-            print("\n错误：drl_controller.py 已退出，网页未启动。")
-            return
-
-        rows = get_data_length()
-        print(f"\r[2] 等待数据采集完成: {rows}/{MIN_DATA_ROWS} 行", end="")
-        time.sleep(2)
-
-    print(f"\n[3] 数据已达到 {MIN_DATA_ROWS} 行，启动网页...")
+    print("[2] 启动网页监控面板...")
     subprocess.Popen([
         sys.executable,
         "-m",
@@ -60,7 +50,8 @@ def launch_system():
     ], cwd=BASE_DIR)
     time.sleep(2)
     webbrowser.open(APP_URL)
-    print(f"[4] 网页已打开: {APP_URL}")
+    print(f"[3] 网页已打开: {APP_URL}")
+    print(f"[4] 页面将实时显示数据采集进度，达到 {MIN_DATA_ROWS} 行后进入控制阶段。")
     print("DRL 控制系统仍在运行。按 Ctrl+C 可停止启动器。")
 
     try:
@@ -77,6 +68,8 @@ def render_dashboard():
 
     # --- 侧边栏：状态显示 ---
     st.sidebar.header("系统状态")
+    phase_placeholder = st.sidebar.empty()
+    progress_placeholder = st.sidebar.empty()
     status_placeholder = st.sidebar.empty()
     pm25_metric = st.sidebar.empty()
     pm10_metric = st.sidebar.empty()
@@ -93,11 +86,16 @@ def render_dashboard():
         st.subheader("📈 指数实时动态")
         chart_placeholder = st.empty()
 
+    stage_placeholder = st.empty()
+
     # --- 实时刷新逻辑 ---
     def get_data():
         if os.path.exists(DATA_FILE):
-            df = pd.read_csv(DATA_FILE)
-            return df
+            try:
+                df = pd.read_csv(DATA_FILE)
+                return df
+            except Exception:
+                return None
         return None
 
     def get_command():
@@ -109,14 +107,27 @@ def render_dashboard():
     while True:
         df = get_data()
         cmd = get_command()
+        rows = 0 if df is None else len(df)
+        progress_value = min(rows / MIN_DATA_ROWS, 1.0)
+
+        if rows < MIN_DATA_ROWS:
+            phase_placeholder.markdown("### 当前阶段: **数据采集中**")
+            progress_placeholder.progress(progress_value)
+            status_placeholder.markdown(f"### 正在采集数据: **{rows}/{MIN_DATA_ROWS}**")
+            stage_placeholder.info(f"正在采集数据：{rows}/{MIN_DATA_ROWS}。数据达到要求后，系统将自动进入预测与喷淋控制阶段。")
+        else:
+            phase_placeholder.markdown("### 当前阶段: **智能控制中**")
+            progress_placeholder.progress(1.0)
+            stage_placeholder.success("数据采集已完成，系统已进入预测与喷淋控制阶段。")
 
         if df is not None and len(df) > 0:
             # 1. 更新数值指标
             latest = df.iloc[-1]
 
             # 2. 更新系统状态
-            status_color = "🔴 喷淋开启" if cmd == "1" else "⚪ 系统待机"
-            status_placeholder.markdown(f"### 当前状态: **{status_color}**")
+            if rows >= MIN_DATA_ROWS:
+                status_color = "🔴 喷淋开启" if cmd == "1" else "⚪ 系统待机"
+                status_placeholder.markdown(f"### 当前状态: **{status_color}**")
             pm25_metric.metric("当前 PM2.5", f"{latest['PM2.5']} μg/m³")
             pm10_metric.metric("当前 PM10", f"{latest['PM10']} μg/m³")
             tsp_metric.metric("当前 TSP", f"{latest['TSP']} μg/m³")
@@ -132,6 +143,10 @@ def render_dashboard():
             if os.path.exists(frame_path):
                 img = Image.open(frame_path)
                 video_placeholder.image(img, width="stretch")
+        else:
+            pm25_metric.metric("当前 PM2.5", "等待数据")
+            pm10_metric.metric("当前 PM10", "等待数据")
+            tsp_metric.metric("当前 TSP", "等待数据")
 
         time.sleep(0.5)  # 刷新频率
 
