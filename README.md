@@ -15,6 +15,7 @@
 ```text
 .
 ├── app.py                 # Streamlit 可视化界面与系统启动入口
+├── dashboard.py           # Streamlit 实时监控页面
 ├── collector.py           # 视频采集、YOLO 检测和环境数据模拟
 ├── drl_controller.py      # DQN 喷淋控制逻辑
 ├── 预测1.py               # Attention-LSTM 预测模型训练脚本

@@ -1,25 +1,38 @@
+import atexit
 import os
+import signal
 import subprocess
 import sys
+import threading
 import time
+import urllib.request
 import webbrowser
 
 import pandas as pd
-import streamlit as st
-from PIL import Image
-from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 # --- 配置 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+PREFERRED_PYTHON = "/Users/nayuta/miniconda3/envs/dust_env/bin/python"
+RUNTIME_PYTHON = PREFERRED_PYTHON if os.path.exists(PREFERRED_PYTHON) else sys.executable
 DATA_FILE = os.path.join(OUTPUT_DIR, "dust_dataset.csv")
 COMMAND_FILE = os.path.join(OUTPUT_DIR, "cannon_command.txt")
 DRL_SCRIPT = os.path.join(BASE_DIR, "drl_controller.py")
+DASHBOARD_SCRIPT = os.path.join(BASE_DIR, "dashboard.py")
 MIN_DATA_ROWS = 800
 APP_PORT = 8502
-APP_URL = f"http://127.0.0.1:{APP_PORT}"
+SERVER_START_TIMEOUT = 60
+MANAGED_PROCESSES = []
+
+
+def dashboard_url(port):
+    return f"http://localhost:{port}"
+
+
+def health_check_url(port):
+    return f"http://127.0.0.1:{port}"
 
 
 def get_data_length():
@@ -31,130 +44,163 @@ def get_data_length():
         return 0
 
 
-def launch_system():
-    print("=" * 60)
-    print("智慧工地 AI 抑尘系统启动器")
-    print("=" * 60)
-    print("\n[1] 启动 DRL 控制系统...")
+def wait_for_server(proc, port, timeout=SERVER_START_TIMEOUT):
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if proc.poll() is not None:
+            return False
 
-    drl_proc = subprocess.Popen([sys.executable, DRL_SCRIPT], cwd=BASE_DIR)
+        try:
+            with urllib.request.urlopen(health_check_url(port), timeout=1):
+                return True
+        except Exception:
+            time.sleep(0.5)
 
-    print("[2] 启动网页监控面板...")
-    subprocess.Popen([
-        sys.executable,
+    return False
+
+
+def open_dashboard_url(url):
+    opened = webbrowser.open(url, new=2)
+
+    if sys.platform == "darwin":
+        for command in (["/usr/bin/open", url], ["open", url]):
+            try:
+                subprocess.run(
+                    command,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                    check=False,
+                )
+                opened = True
+                break
+            except Exception:
+                pass
+
+    return opened
+
+
+def streamlit_args(port=APP_PORT):
+    return [
+        RUNTIME_PYTHON,
         "-m",
         "streamlit",
         "run",
-        __file__,
+        DASHBOARD_SCRIPT,
         "--server.port",
-        str(APP_PORT),
+        str(port),
         "--server.address",
         "127.0.0.1",
-    ], cwd=BASE_DIR)
-    time.sleep(2)
-    webbrowser.open(APP_URL)
-    print(f"[3] 网页已打开: {APP_URL}")
-    print(f"[4] 页面将实时显示数据采集进度，达到 {MIN_DATA_ROWS} 行后进入控制阶段。")
-    print("DRL 控制系统仍在运行。按 Ctrl+C 可停止启动器。")
+        "--server.headless",
+        "false",
+        "--server.showEmailPrompt",
+        "false",
+        "--server.fileWatcherType",
+        "none",
+        "--browser.gatherUsageStats",
+        "false",
+    ]
+
+
+def open_dashboard_when_ready(port=APP_PORT):
+    url = dashboard_url(port)
+    start_time = time.time()
+    while time.time() - start_time < SERVER_START_TIMEOUT:
+        try:
+            with urllib.request.urlopen(health_check_url(port), timeout=1):
+                open_dashboard_url(url)
+                print(f"网页已打开: {url}")
+                return
+        except Exception:
+            time.sleep(0.5)
+
+    print(f"未能自动检测到网页服务，请检查控制台报错，或手动打开: {url}")
+
+
+def start_foreground_dashboard(port=APP_PORT):
+    opener = threading.Thread(target=open_dashboard_when_ready, args=(port,), daemon=True)
+    opener.start()
+
+    proc = subprocess.Popen(streamlit_args(port), cwd=BASE_DIR, env=child_env())
+    MANAGED_PROCESSES.append(("网页服务", proc))
+    return proc
+
+
+def start_managed_process(name, args, **kwargs):
+    proc = subprocess.Popen(args, start_new_session=True, **kwargs)
+    MANAGED_PROCESSES.append((name, proc))
+    return proc
+
+
+def child_env():
+    env = os.environ.copy()
+    env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    env["MPLCONFIGDIR"] = os.path.join(OUTPUT_DIR, "matplotlib")
+    os.makedirs(env["MPLCONFIGDIR"], exist_ok=True)
+    return env
+
+
+def stop_process_group(name, proc):
+    if proc.poll() is not None:
+        return
+
+    print(f"正在停止 {name}...")
+    try:
+        if os.name == "nt":
+            proc.terminate()
+        else:
+            os.killpg(proc.pid, signal.SIGTERM)
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        if os.name == "nt":
+            proc.kill()
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def cleanup_processes():
+    for name, proc in reversed(MANAGED_PROCESSES):
+        stop_process_group(name, proc)
+    MANAGED_PROCESSES.clear()
+
+
+def register_shutdown_handlers():
+    def handle_shutdown(signum, frame):
+        print("\n收到停止信号，正在关闭后台进程...")
+        cleanup_processes()
+        sys.exit(0)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, handle_shutdown)
+
+
+def launch_system():
+    register_shutdown_handlers()
+    atexit.register(cleanup_processes)
+
+    print("=" * 60)
+    print("智慧工地 AI 抑尘系统启动器")
+    print("=" * 60)
+    print(f"运行解释器: {RUNTIME_PYTHON}")
+
+    print("\n[1] 启动 DRL 控制系统...")
+    drl_proc = start_managed_process("DRL 控制系统", [RUNTIME_PYTHON, DRL_SCRIPT], cwd=BASE_DIR, env=child_env())
+
+    print("\n[2] 启动网页监控面板...")
+    print(f"网页地址: {dashboard_url(APP_PORT)}")
+    print(f"[3] 页面将实时显示数据采集进度，达到 {MIN_DATA_ROWS} 行后进入控制阶段。")
+    print("如果网页打不开，请直接查看下面 Streamlit 输出的 Traceback/Error。")
 
     try:
-        drl_proc.wait()
+        dashboard_proc = start_foreground_dashboard(APP_PORT)
+        dashboard_proc.wait()
     except KeyboardInterrupt:
-        print("\n正在停止 DRL 控制系统...")
-        drl_proc.terminate()
+        print("\n正在停止系统...")
+    finally:
+        cleanup_processes()
 
 
-def render_dashboard():
-    st.set_page_config(page_title="智慧工地 AI 抑尘系统", layout="wide")
-
-    st.title("🏗️ 智慧工地：基于 DRL + LSTM 的抑尘自主控制云平台")
-
-    # --- 侧边栏：状态显示 ---
-    st.sidebar.header("系统状态")
-    phase_placeholder = st.sidebar.empty()
-    progress_placeholder = st.sidebar.empty()
-    status_placeholder = st.sidebar.empty()
-    pm25_metric = st.sidebar.empty()
-    pm10_metric = st.sidebar.empty()
-    tsp_metric = st.sidebar.empty()
-
-    # --- 主界面布局 ---
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        st.subheader("📸 实时 AI 监控画面")
-        video_placeholder = st.empty()
-
-    with col2:
-        st.subheader("📈 指数实时动态")
-        chart_placeholder = st.empty()
-
-    stage_placeholder = st.empty()
-
-    # --- 实时刷新逻辑 ---
-    def get_data():
-        if os.path.exists(DATA_FILE):
-            try:
-                df = pd.read_csv(DATA_FILE)
-                return df
-            except Exception:
-                return None
-        return None
-
-    def get_command():
-        if os.path.exists(COMMAND_FILE):
-            with open(COMMAND_FILE, "r") as f:
-                return f.read().strip()
-        return "0"
-
-    while True:
-        df = get_data()
-        cmd = get_command()
-        rows = 0 if df is None else len(df)
-        progress_value = min(rows / MIN_DATA_ROWS, 1.0)
-
-        if rows < MIN_DATA_ROWS:
-            phase_placeholder.markdown("### 当前阶段: **数据采集中**")
-            progress_placeholder.progress(progress_value)
-            status_placeholder.markdown(f"### 正在采集数据: **{rows}/{MIN_DATA_ROWS}**")
-            stage_placeholder.info(f"正在采集数据：{rows}/{MIN_DATA_ROWS}。数据达到要求后，系统将自动进入预测与喷淋控制阶段。")
-        else:
-            phase_placeholder.markdown("### 当前阶段: **智能控制中**")
-            progress_placeholder.progress(1.0)
-            stage_placeholder.success("数据采集已完成，系统已进入预测与喷淋控制阶段。")
-
-        if df is not None and len(df) > 0:
-            # 1. 更新数值指标
-            latest = df.iloc[-1]
-
-            # 2. 更新系统状态
-            if rows >= MIN_DATA_ROWS:
-                status_color = "🔴 喷淋开启" if cmd == "1" else "⚪ 系统待机"
-                status_placeholder.markdown(f"### 当前状态: **{status_color}**")
-            pm25_metric.metric("当前 PM2.5", f"{latest['PM2.5']} μg/m³")
-            pm10_metric.metric("当前 PM10", f"{latest['PM10']} μg/m³")
-            tsp_metric.metric("当前 TSP", f"{latest['TSP']} μg/m³")
-
-            # 3. 更新动态折线图
-            # 取最后 50 个数据点展示
-            plot_df = df.tail(50)[['PM2.5', 'TSP']]
-            chart_placeholder.line_chart(plot_df)
-
-            # 4. 更新监控画面
-            # collector.py 每次处理完帧后保存 latest_frame.jpg，app.py 直接读取它。
-            frame_path = os.path.join(OUTPUT_DIR, "latest_frame.jpg")
-            if os.path.exists(frame_path):
-                img = Image.open(frame_path)
-                video_placeholder.image(img, width="stretch")
-        else:
-            pm25_metric.metric("当前 PM2.5", "等待数据")
-            pm10_metric.metric("当前 PM10", "等待数据")
-            tsp_metric.metric("当前 TSP", "等待数据")
-
-        time.sleep(0.5)  # 刷新频率
-
-
-if get_script_run_ctx() is None:
+if __name__ == "__main__":
     launch_system()
-else:
-    render_dashboard()
