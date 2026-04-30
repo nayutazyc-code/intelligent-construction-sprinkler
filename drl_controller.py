@@ -1,4 +1,5 @@
 from collections import deque
+import json
 import random
 import matplotlib.pyplot as plt
 import os, sys, time, subprocess, pandas as pd, numpy as np
@@ -20,6 +21,7 @@ MODEL_FILE = os.path.join(OUTPUT_DIR, "dust_attention_lstm_model.keras")
 COLLECTOR_SCRIPT = os.path.join(BASE_DIR, "collector.py")
 COMMAND_FILE = os.path.join(OUTPUT_DIR, "cannon_command.txt")
 EVALUATION_PLOT_FILE = os.path.join(OUTPUT_DIR, "drl_multi_metrics_evaluation.png")
+STATUS_FILE = os.path.join(OUTPUT_DIR, "system_status.json")
 
 MIN_DATA_ROWS = 800
 SEQ_LEN = 20
@@ -29,6 +31,21 @@ BATCH_SIZE = 32
 PM25_SAFE_THRESHOLD = 75.0
 TSP_SAFE_THRESHOLD = 200.0
 MIN_SWITCH_INTERVAL = 60
+
+
+def write_status(stage, message, rows=None):
+    payload = {
+        "stage": stage,
+        "message": message,
+        "updated_at": time.time(),
+    }
+    if rows is not None:
+        payload["rows"] = rows
+
+    temp_path = STATUS_FILE + ".tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False)
+    os.replace(temp_path, STATUS_FILE)
 
 class Attention(Layer):
     def __init__(self, **kwargs):
@@ -115,22 +132,33 @@ def main():
     print("=" * 60)
 
     print("\n[1] 启动虚拟物理环境 (collector.py)...")
+    write_status("collecting", f"正在采集初始数据: 0/{MIN_DATA_ROWS}", rows=0)
     collector_proc = subprocess.Popen([sys.executable, COLLECTOR_SCRIPT], cwd=BASE_DIR)
 
     while get_data_length() < MIN_DATA_ROWS:
-        print(f"\r等待初始数据积累: {get_data_length()}/{MIN_DATA_ROWS} 行...", end="")
+        rows = get_data_length()
+        write_status("collecting", f"正在采集初始数据: {rows}/{MIN_DATA_ROWS}", rows=rows)
+        print(f"\r等待初始数据积累: {rows}/{MIN_DATA_ROWS} 行...", end="")
         time.sleep(2)
         # 防闪退提示：如果 collector.py 出错了，这里会立刻停止并报错
         if collector_proc.poll() is not None:
+            write_status("error", "视频采集程序意外退出，请检查视频路径。")
             print("\n 错误：视频采集程序(collector.py)意外闪退！请检查视频路径是否正确。")
             return
 
     if not os.path.exists(MODEL_FILE):
         print(f"\n\n[2] 数据达标！启动 {TRAINER_SCRIPT} 训练预测大脑...")
+        write_status("training", "数据采集完成，正在训练 Attention-LSTM 预测模型。", rows=get_data_length())
         trainer_proc = subprocess.Popen([sys.executable, TRAINER_SCRIPT], cwd=BASE_DIR)
         trainer_proc.wait()
+        if trainer_proc.returncode != 0:
+            write_status("error", "Attention-LSTM 模型训练失败，请检查训练脚本输出。", rows=get_data_length())
+            return
+    else:
+        write_status("training", "已检测到训练好的 Attention-LSTM 模型，正在加载模型。", rows=get_data_length())
 
     print("\n[3] 唤醒 DQN 决策引擎...")
+    write_status("control", "模型已就绪，正在进入 DRL 喷淋控制阶段。", rows=get_data_length())
     lstm_model = load_model(MODEL_FILE, custom_objects={'Attention': Attention})
     agent = DQNAgent(STATE_SIZE, ACTION_SIZE)
 
@@ -257,6 +285,7 @@ def main():
 
     except KeyboardInterrupt:
         print("\n\n⚠️ 正在生成多指标评价报告...")
+        write_status("stopped", "系统已停止，正在生成运行评价报告。", rows=get_data_length())
         collector_proc.kill()
         with open(COMMAND_FILE, "w") as f:
             f.write("0")

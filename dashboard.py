@@ -1,3 +1,4 @@
+import json
 import os
 import time
 
@@ -11,6 +12,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 DATA_FILE = os.path.join(OUTPUT_DIR, "dust_dataset.csv")
 COMMAND_FILE = os.path.join(OUTPUT_DIR, "cannon_command.txt")
+STATUS_FILE = os.path.join(OUTPUT_DIR, "system_status.json")
 MIN_DATA_ROWS = 800
 
 
@@ -53,26 +55,57 @@ def render_dashboard():
                 return f.read().strip()
         return "0"
 
+    def get_status():
+        if os.path.exists(STATUS_FILE):
+            try:
+                with open(STATUS_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                return {}
+        return {}
+
     while True:
         df = get_data()
         cmd = get_command()
+        status = get_status()
         rows = 0 if df is None else len(df)
         progress_value = min(rows / MIN_DATA_ROWS, 1.0)
+        stage = status.get("stage")
+        message = status.get("message")
 
-        if rows < MIN_DATA_ROWS:
+        if stage == "training":
+            phase_placeholder.markdown("### 当前阶段: **模型训练中**")
+            progress_placeholder.progress(1.0)
+            status_placeholder.markdown("### Attention-LSTM 模型训练中")
+            stage_placeholder.warning(message or "数据采集完成，正在训练 Attention-LSTM 预测模型。")
+        elif stage == "control":
+            phase_placeholder.markdown("### 当前阶段: **DRL 喷淋控制中**")
+            progress_placeholder.progress(1.0)
+            stage_placeholder.success(message or "模型已就绪，系统已进入 DRL 喷淋控制阶段。")
+        elif stage == "error":
+            phase_placeholder.markdown("### 当前阶段: **系统异常**")
+            progress_placeholder.progress(progress_value)
+            status_placeholder.markdown("### 请检查后台输出")
+            stage_placeholder.error(message or "系统运行异常，请检查控制台输出。")
+        elif stage == "stopped":
+            phase_placeholder.markdown("### 当前阶段: **系统已停止**")
+            progress_placeholder.progress(progress_value)
+            status_placeholder.markdown("### 系统停止运行")
+            stage_placeholder.info(message or "系统已停止。")
+        elif rows < MIN_DATA_ROWS:
             phase_placeholder.markdown("### 当前阶段: **数据采集中**")
             progress_placeholder.progress(progress_value)
             status_placeholder.markdown(f"### 正在采集数据: **{rows}/{MIN_DATA_ROWS}**")
-            stage_placeholder.info(f"正在采集数据：{rows}/{MIN_DATA_ROWS}。数据达到要求后，系统将自动进入预测与喷淋控制阶段。")
+            stage_placeholder.info(message or f"正在采集数据：{rows}/{MIN_DATA_ROWS}。数据达到要求后，系统将进入 Attention-LSTM 模型训练阶段。")
         else:
-            phase_placeholder.markdown("### 当前阶段: **智能控制中**")
+            phase_placeholder.markdown("### 当前阶段: **准备进入模型训练**")
             progress_placeholder.progress(1.0)
-            stage_placeholder.success("数据采集已完成，系统已进入预测与喷淋控制阶段。")
+            stage_placeholder.info("数据采集已完成，正在等待后台进入 Attention-LSTM 模型训练阶段。")
 
         if df is not None and len(df) > 0:
             latest = df.iloc[-1]
 
-            if rows >= MIN_DATA_ROWS:
+            if stage == "control":
                 status_color = "🔴 喷淋开启" if cmd == "1" else "⚪ 系统待机"
                 status_placeholder.markdown(f"### 当前状态: **{status_color}**")
             pm25_metric.metric("当前 PM2.5", f"{latest['PM2.5']} μg/m³")

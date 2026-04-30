@@ -14,6 +14,8 @@ dust_dataset.csv
 cannon_command.txt
 latest_frame.jpg
 latest_frame.jpg.tmp.jpg
+system_status.json
+system_status.json.tmp
 
 # Generated models and reports
 dust_attention_lstm_model.keras
