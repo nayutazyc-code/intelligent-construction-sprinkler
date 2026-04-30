@@ -19,6 +19,7 @@
 ├── drl_controller.py      # DQN 喷淋控制逻辑
 ├── 预测1.py               # Attention-LSTM 预测模型训练脚本
 ├── best.pt                # YOLO 检测模型权重
+├── outputs/               # 运行时生成的数据、模型和图表
 └── plots/                 # 相关图表或实验结果目录
 ```
 
@@ -61,25 +62,25 @@ VIDEO_PATH = "/Users/nayuta/Desktop/data3.mp4"
 3. 启动系统：
 
 ```bash
-streamlit run app.py
+python app.py
 ```
 
-系统默认会在本地启动 Streamlit 页面，并实时展示粉尘检测、指标变化和喷淋状态。
+系统默认会启动后台采集和控制流程，并打开 Streamlit 页面。页面会先显示数据采集进度，达到 800 行后自动进入预测与喷淋控制阶段。
 
 ## 运行过程说明
 
 首次运行时，系统会先启动数据采集与环境模拟流程，等待数据量达到训练要求后，再训练或加载预测模型，并进入喷淋控制流程。
 
-运行过程中可能会生成以下文件：
+运行过程中生成的文件会统一保存到 `outputs/` 目录：
 
-- `dust_dataset.csv`
-- `cannon_command.txt`
-- `latest_frame.jpg`
-- `dust_attention_lstm_model.keras`
-- `optimized_prediction.png`
-- `attention_heatmap.png`
-- `analysis_result.png`
-- `drl_multi_metrics_evaluation.png`
+- `outputs/dust_dataset.csv`
+- `outputs/cannon_command.txt`
+- `outputs/latest_frame.jpg`
+- `outputs/dust_attention_lstm_model.keras`
+- `outputs/optimized_prediction.png`
+- `outputs/attention_heatmap.png`
+- `outputs/analysis_result.png`
+- `outputs/drl_multi_metrics_evaluation.png`
 
 这些文件属于运行数据、模型输出或实验结果，可根据需要自行保存。
 

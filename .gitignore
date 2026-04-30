@@ -8,6 +8,8 @@ venv/
 env/
 
 # Runtime data
+outputs/*
+!outputs/.gitkeep
 dust_dataset.csv
 cannon_command.txt
 latest_frame.jpg

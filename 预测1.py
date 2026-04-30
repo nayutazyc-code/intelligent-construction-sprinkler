@@ -11,6 +11,15 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.losses import Huber
 import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+CSV_FILE = os.path.join(OUTPUT_DIR, "dust_dataset.csv")
+MODEL_FILE = os.path.join(OUTPUT_DIR, "dust_attention_lstm_model.keras")
+PREDICTION_PLOT_FILE = os.path.join(OUTPUT_DIR, "optimized_prediction.png")
+ATTENTION_HEATMAP_FILE = os.path.join(OUTPUT_DIR, "attention_heatmap.png")
+
 
 # 1. Attention 层定义
 # 升级版的 Attention 层 (Bahdanau 风格)
@@ -54,7 +63,6 @@ class Attention(Layer):
         return context_vector, weights
 
 # 2. 数据处理
-CSV_FILE = 'dust_dataset.csv'
 df = pd.read_csv(CSV_FILE)
 print("数据统计特征:\n", df.describe())
 
@@ -140,11 +148,11 @@ for i in range(3):
     axes[i].grid(True, linestyle='--', alpha=0.5)
 
 plt.tight_layout()
-plt.savefig("optimized_prediction.png", dpi=300)
+plt.savefig(PREDICTION_PLOT_FILE, dpi=300)
 plt.show()
 
-model.save("dust_attention_lstm_model.keras")
-print("训练结束，主预测模型已保存。")
+model.save(MODEL_FILE)
+print(f"训练结束，主预测模型已保存: {MODEL_FILE}")
 
 
 # ==========================================
@@ -175,7 +183,7 @@ plt.xticks(np.arange(0, n_steps))
 plt.yticks(np.arange(0, num_samples_to_plot))
 
 plt.tight_layout()
-plt.savefig("attention_heatmap.png", dpi=300)
+plt.savefig(ATTENTION_HEATMAP_FILE, dpi=300)
 plt.show()
 
-print("Attention Heatmap 生成完毕并已保存为 'attention_heatmap.png'。")
+print(f"Attention Heatmap 生成完毕并已保存为: {ATTENTION_HEATMAP_FILE}")

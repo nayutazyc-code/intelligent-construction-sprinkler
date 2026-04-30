@@ -11,8 +11,11 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 # --- 配置 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "dust_dataset.csv")
-COMMAND_FILE = os.path.join(BASE_DIR, "cannon_command.txt")
+OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+DATA_FILE = os.path.join(OUTPUT_DIR, "dust_dataset.csv")
+COMMAND_FILE = os.path.join(OUTPUT_DIR, "cannon_command.txt")
 DRL_SCRIPT = os.path.join(BASE_DIR, "drl_controller.py")
 MIN_DATA_ROWS = 800
 APP_PORT = 8502
@@ -139,7 +142,7 @@ def render_dashboard():
 
             # 4. 更新监控画面
             # collector.py 每次处理完帧后保存 latest_frame.jpg，app.py 直接读取它。
-            frame_path = os.path.join(BASE_DIR, "latest_frame.jpg")
+            frame_path = os.path.join(OUTPUT_DIR, "latest_frame.jpg")
             if os.path.exists(frame_path):
                 img = Image.open(frame_path)
                 video_placeholder.image(img, width="stretch")

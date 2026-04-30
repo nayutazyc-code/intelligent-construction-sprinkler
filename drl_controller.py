@@ -11,11 +11,15 @@ from tensorflow.keras.optimizers import Adam
 from sklearn.preprocessing import StandardScaler
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "dust_dataset.csv")
+OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+DATA_FILE = os.path.join(OUTPUT_DIR, "dust_dataset.csv")
 TRAINER_SCRIPT = os.path.join(BASE_DIR, "预测1.py")
-MODEL_FILE = os.path.join(BASE_DIR, "dust_attention_lstm_model.keras")
-COLLECTOR_SCRIPT = "collector.py"
-COMMAND_FILE = "cannon_command.txt"
+MODEL_FILE = os.path.join(OUTPUT_DIR, "dust_attention_lstm_model.keras")
+COLLECTOR_SCRIPT = os.path.join(BASE_DIR, "collector.py")
+COMMAND_FILE = os.path.join(OUTPUT_DIR, "cannon_command.txt")
+EVALUATION_PLOT_FILE = os.path.join(OUTPUT_DIR, "drl_multi_metrics_evaluation.png")
 
 MIN_DATA_ROWS = 800
 SEQ_LEN = 20
@@ -111,7 +115,7 @@ def main():
     print("=" * 60)
 
     print("\n[1] 启动虚拟物理环境 (collector.py)...")
-    collector_proc = subprocess.Popen([sys.executable, COLLECTOR_SCRIPT])
+    collector_proc = subprocess.Popen([sys.executable, COLLECTOR_SCRIPT], cwd=BASE_DIR)
 
     while get_data_length() < MIN_DATA_ROWS:
         print(f"\r等待初始数据积累: {get_data_length()}/{MIN_DATA_ROWS} 行...", end="")
@@ -123,7 +127,7 @@ def main():
 
     if not os.path.exists(MODEL_FILE):
         print(f"\n\n[2] 数据达标！启动 {TRAINER_SCRIPT} 训练预测大脑...")
-        trainer_proc = subprocess.Popen([sys.executable, TRAINER_SCRIPT])
+        trainer_proc = subprocess.Popen([sys.executable, TRAINER_SCRIPT], cwd=BASE_DIR)
         trainer_proc.wait()
 
     print("\n[3] 唤醒 DQN 决策引擎...")
@@ -277,8 +281,8 @@ def main():
         plt.ylabel("TSP"), plt.xlabel("Time Steps"), plt.legend(), plt.grid(True, alpha=0.3)
 
         plt.tight_layout()
-        plt.savefig("drl_multi_metrics_evaluation.png", dpi=300)
-        print("✅ 评价图已生成: drl_multi_metrics_evaluation.png")
+        plt.savefig(EVALUATION_PLOT_FILE, dpi=300)
+        print(f"✅ 评价图已生成: {EVALUATION_PLOT_FILE}")
 
 if __name__ == "__main__":
     main()
