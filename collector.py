@@ -9,20 +9,23 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
 
+from config import BASE_DIR, load_config, runtime_paths
+
 # --- 基础路径配置 ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+CONFIG = load_config()
+PATHS = runtime_paths(CONFIG)
+OUTPUT_DIR = PATHS["output_dir"]
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-VIDEO_PATH = "/Users/nayuta/Desktop/data3.mp4"  # 请确认视频路径正确
-CSV_FILE = os.path.join(OUTPUT_DIR, "dust_dataset.csv")
-COMMAND_FILE = os.path.join(OUTPUT_DIR, "cannon_command.txt")
-MODEL_PATH = os.path.join(BASE_DIR, "best.pt")
-LATEST_FRAME_PATH = os.path.join(OUTPUT_DIR, "latest_frame.jpg")
+VIDEO_PATH = CONFIG["video_path"]
+CSV_FILE = PATHS["data_file"]
+COMMAND_FILE = PATHS["command_file"]
+MODEL_PATH = CONFIG["model_path"]
+LATEST_FRAME_PATH = PATHS["latest_frame_file"]
 PREVIEW_SIZE = (640, 480)
 PREVIEW_JPEG_QUALITY = 75
 PREVIEW_SAVE_INTERVAL = 3
-ANALYSIS_PLOT_FILE = os.path.join(OUTPUT_DIR, "analysis_result.png")
+ANALYSIS_PLOT_FILE = PATHS["analysis_plot_file"]
 
 # --- 初始化全局变量 ---
 try:

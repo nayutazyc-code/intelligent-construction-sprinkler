@@ -11,14 +11,17 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.losses import Huber
 import os
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+from config import load_config, runtime_paths
+
+CONFIG = load_config()
+PATHS = runtime_paths(CONFIG)
+OUTPUT_DIR = PATHS["output_dir"]
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-CSV_FILE = os.path.join(OUTPUT_DIR, "dust_dataset.csv")
-MODEL_FILE = os.path.join(OUTPUT_DIR, "dust_attention_lstm_model.keras")
-PREDICTION_PLOT_FILE = os.path.join(OUTPUT_DIR, "optimized_prediction.png")
-ATTENTION_HEATMAP_FILE = os.path.join(OUTPUT_DIR, "attention_heatmap.png")
+CSV_FILE = PATHS["data_file"]
+MODEL_FILE = PATHS["model_file"]
+PREDICTION_PLOT_FILE = PATHS["prediction_plot_file"]
+ATTENTION_HEATMAP_FILE = PATHS["attention_heatmap_file"]
 
 
 # 1. Attention 层定义

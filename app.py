@@ -10,19 +10,19 @@ import webbrowser
 
 import pandas as pd
 
-# --- 配置 ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+from config import (
+    DEFAULT_APP_PORT,
+    BASE_DIR,
+    is_config_ready,
+    load_config,
+    runtime_paths,
+)
 
+# --- 配置 ---
 PREFERRED_PYTHON = "/Users/nayuta/miniconda3/envs/dust_env/bin/python"
 RUNTIME_PYTHON = PREFERRED_PYTHON if os.path.exists(PREFERRED_PYTHON) else sys.executable
-DATA_FILE = os.path.join(OUTPUT_DIR, "dust_dataset.csv")
-COMMAND_FILE = os.path.join(OUTPUT_DIR, "cannon_command.txt")
 DRL_SCRIPT = os.path.join(BASE_DIR, "drl_controller.py")
 DASHBOARD_SCRIPT = os.path.join(BASE_DIR, "dashboard.py")
-MIN_DATA_ROWS = 800
-APP_PORT = 8502
 SERVER_START_TIMEOUT = 60
 MANAGED_PROCESSES = []
 
@@ -36,10 +36,11 @@ def health_check_url(port):
 
 
 def get_data_length():
-    if not os.path.exists(DATA_FILE):
+    paths = runtime_paths()
+    if not os.path.exists(paths["data_file"]):
         return 0
     try:
-        return len(pd.read_csv(DATA_FILE))
+        return len(pd.read_csv(paths["data_file"]))
     except Exception:
         return 0
 
@@ -80,7 +81,7 @@ def open_dashboard_url(url):
     return opened
 
 
-def streamlit_args(port=APP_PORT):
+def streamlit_args(port):
     return [
         RUNTIME_PYTHON,
         "-m",
@@ -102,7 +103,7 @@ def streamlit_args(port=APP_PORT):
     ]
 
 
-def open_dashboard_when_ready(port=APP_PORT):
+def open_dashboard_when_ready(port):
     url = dashboard_url(port)
     start_time = time.time()
     while time.time() - start_time < SERVER_START_TIMEOUT:
@@ -117,11 +118,11 @@ def open_dashboard_when_ready(port=APP_PORT):
     print(f"未能自动检测到网页服务，请检查控制台报错，或手动打开: {url}")
 
 
-def start_foreground_dashboard(port=APP_PORT):
+def start_foreground_dashboard(port):
     opener = threading.Thread(target=open_dashboard_when_ready, args=(port,), daemon=True)
     opener.start()
 
-    proc = subprocess.Popen(streamlit_args(port), cwd=BASE_DIR, env=child_env())
+    proc = subprocess.Popen(streamlit_args(port), cwd=BASE_DIR, env=child_env(), start_new_session=True)
     MANAGED_PROCESSES.append(("网页服务", proc))
     return proc
 
@@ -133,9 +134,10 @@ def start_managed_process(name, args, **kwargs):
 
 
 def child_env():
+    paths = runtime_paths()
     env = os.environ.copy()
     env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    env["MPLCONFIGDIR"] = os.path.join(OUTPUT_DIR, "matplotlib")
+    env["MPLCONFIGDIR"] = paths["matplotlib_dir"]
     os.makedirs(env["MPLCONFIGDIR"], exist_ok=True)
     return env
 
@@ -166,6 +168,30 @@ def cleanup_processes():
     MANAGED_PROCESSES.clear()
 
 
+def stop_process(name, proc):
+    stop_process_group(name, proc)
+    MANAGED_PROCESSES[:] = [(item_name, item_proc) for item_name, item_proc in MANAGED_PROCESSES if item_proc != proc]
+
+
+def run_initial_setup():
+    print("\n检测到初始化配置缺失或无效，先打开初始化设置页面...")
+    print(f"初始化页面地址: {dashboard_url(DEFAULT_APP_PORT)}")
+    print("请在网页中保存设置。保存后系统会自动进入启动流程。")
+
+    dashboard_proc = start_foreground_dashboard(DEFAULT_APP_PORT)
+    try:
+        while dashboard_proc.poll() is None:
+            if is_config_ready():
+                print("\n初始化配置已保存，正在切换到完整系统...")
+                stop_process("初始化设置页面", dashboard_proc)
+                return True
+            time.sleep(1)
+    except KeyboardInterrupt:
+        raise
+
+    return is_config_ready()
+
+
 def register_shutdown_handlers():
     def handle_shutdown(signum, frame):
         print("\n收到停止信号，正在关闭后台进程...")
@@ -185,16 +211,24 @@ def launch_system():
     print("=" * 60)
     print(f"运行解释器: {RUNTIME_PYTHON}")
 
+    if not is_config_ready() and not run_initial_setup():
+        print("初始化配置尚未完成，系统未启动。")
+        return
+
+    config = load_config()
+    app_port = config["app_port"]
+    min_data_rows = config["min_data_rows"]
+
     print("\n[1] 启动 DRL 控制系统...")
     drl_proc = start_managed_process("DRL 控制系统", [RUNTIME_PYTHON, DRL_SCRIPT], cwd=BASE_DIR, env=child_env())
 
     print("\n[2] 启动网页监控面板...")
-    print(f"网页地址: {dashboard_url(APP_PORT)}")
-    print(f"[3] 页面将实时显示数据采集进度，达到 {MIN_DATA_ROWS} 行后进入控制阶段。")
+    print(f"网页地址: {dashboard_url(app_port)}")
+    print(f"[3] 页面将实时显示数据采集进度，达到 {min_data_rows} 行后进入控制阶段。")
     print("如果网页打不开，请直接查看下面 Streamlit 输出的 Traceback/Error。")
 
     try:
-        dashboard_proc = start_foreground_dashboard(APP_PORT)
+        dashboard_proc = start_foreground_dashboard(app_port)
         dashboard_proc.wait()
     except KeyboardInterrupt:
         print("\n正在停止系统...")

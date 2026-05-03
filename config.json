@@ -1,0 +1,7 @@
+{
+  "video_path": "",
+  "model_path": "best.pt",
+  "output_dir": "outputs",
+  "min_data_rows": 800,
+  "app_port": 8502
+}

@@ -11,19 +11,22 @@ from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.optimizers import Adam
 from sklearn.preprocessing import StandardScaler
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+from config import BASE_DIR, load_config, runtime_paths
+
+CONFIG = load_config()
+PATHS = runtime_paths(CONFIG)
+OUTPUT_DIR = PATHS["output_dir"]
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-DATA_FILE = os.path.join(OUTPUT_DIR, "dust_dataset.csv")
+DATA_FILE = PATHS["data_file"]
 TRAINER_SCRIPT = os.path.join(BASE_DIR, "预测1.py")
-MODEL_FILE = os.path.join(OUTPUT_DIR, "dust_attention_lstm_model.keras")
+MODEL_FILE = PATHS["model_file"]
 COLLECTOR_SCRIPT = os.path.join(BASE_DIR, "collector.py")
-COMMAND_FILE = os.path.join(OUTPUT_DIR, "cannon_command.txt")
-EVALUATION_PLOT_FILE = os.path.join(OUTPUT_DIR, "drl_multi_metrics_evaluation.png")
-STATUS_FILE = os.path.join(OUTPUT_DIR, "system_status.json")
+COMMAND_FILE = PATHS["command_file"]
+EVALUATION_PLOT_FILE = PATHS["evaluation_plot_file"]
+STATUS_FILE = PATHS["status_file"]
 
-MIN_DATA_ROWS = 800
+MIN_DATA_ROWS = CONFIG["min_data_rows"]
 SEQ_LEN = 20
 STATE_SIZE = 5
 ACTION_SIZE = 2
