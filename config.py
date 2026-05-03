@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
@@ -127,3 +128,36 @@ def runtime_paths(config=None):
         "evaluation_plot_file": os.path.join(output_dir, "drl_multi_metrics_evaluation.png"),
         "matplotlib_dir": os.path.join(output_dir, "matplotlib"),
     }
+
+
+def runtime_artifact_paths(config=None):
+    paths = runtime_paths(config)
+    return [
+        paths["data_file"],
+        paths["command_file"],
+        paths["status_file"],
+        paths["latest_frame_file"],
+        paths["model_file"],
+        paths["prediction_plot_file"],
+        paths["attention_heatmap_file"],
+        paths["analysis_plot_file"],
+        paths["evaluation_plot_file"],
+    ]
+
+
+def archive_existing_runtime_files(config=None):
+    paths = runtime_paths(config)
+    existing_files = [path for path in runtime_artifact_paths(config) if os.path.isfile(path)]
+    if not existing_files:
+        return None, []
+
+    archive_dir = os.path.join(paths["output_dir"], "history", datetime.now().strftime("%Y%m%d_%H%M%S"))
+    os.makedirs(archive_dir, exist_ok=True)
+
+    moved_files = []
+    for path in existing_files:
+        target_path = os.path.join(archive_dir, os.path.basename(path))
+        os.replace(path, target_path)
+        moved_files.append(target_path)
+
+    return archive_dir, moved_files

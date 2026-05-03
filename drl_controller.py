@@ -11,7 +11,7 @@ from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.optimizers import Adam
 from sklearn.preprocessing import StandardScaler
 
-from config import BASE_DIR, load_config, runtime_paths
+from config import BASE_DIR, archive_existing_runtime_files, load_config, runtime_paths
 
 CONFIG = load_config()
 PATHS = runtime_paths(CONFIG)
@@ -162,6 +162,12 @@ def main():
     print("=" * 60)
     print("智慧工地控制系统")
     print("=" * 60)
+
+    if os.environ.get("SMART_SITE_RUNTIME_PREPARED") != "1":
+        archive_dir, moved_files = archive_existing_runtime_files(CONFIG)
+        if moved_files:
+            print(f"已归档历史运行文件: {archive_dir}")
+            print(f"本次控制流程将从空数据状态开始，共归档 {len(moved_files)} 个文件。")
 
     print("\n[1] 启动虚拟物理环境 (collector.py)...")
     write_status("collecting", f"正在采集初始数据: 0/{MIN_DATA_ROWS}", rows=0)

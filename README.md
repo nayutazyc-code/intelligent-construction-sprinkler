@@ -85,12 +85,13 @@ python app.py
 - `outputs/analysis_result.png`
 - `outputs/drl_multi_metrics_evaluation.png`
 
-这些文件属于运行数据、模型输出或实验结果，可根据需要自行保存。
+每次通过 `python app.py` 启动新流程前，系统会先把已有的运行产物自动归档到 `outputs/history/时间戳/`，再从空数据状态开始采集。这样可以避免旧的 CSV、状态文件、模型或图表被新运行误读。
 
 ## 注意事项
 
 - `best.pt` 是目标检测权重文件，运行前需要确保文件存在。
 - 视频路径、模型路径、输出目录、采集行数和网页端口都可以在首次初始化页面中设置。
 - 如果需要重新配置，可在监控页面侧边栏点击“初始化设置 / 修改设置”。
+- 如果需要查看上一次运行结果，请到 `outputs/history/` 中按时间戳查找归档文件。
 - 如果 OpenCV 无法打开视频，请优先检查视频路径是否正确。
 - TensorFlow 和 Ultralytics 安装耗时较长，建议在虚拟环境中配置项目依赖。

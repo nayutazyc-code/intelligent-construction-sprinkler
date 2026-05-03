@@ -13,6 +13,7 @@ import pandas as pd
 from config import (
     DEFAULT_APP_PORT,
     BASE_DIR,
+    archive_existing_runtime_files,
     is_config_ready,
     load_config,
     runtime_paths,
@@ -25,6 +26,7 @@ DRL_SCRIPT = os.path.join(BASE_DIR, "drl_controller.py")
 DASHBOARD_SCRIPT = os.path.join(BASE_DIR, "dashboard.py")
 SERVER_START_TIMEOUT = 60
 MANAGED_PROCESSES = []
+RUNTIME_PREPARED = False
 
 
 def dashboard_url(port):
@@ -138,6 +140,8 @@ def child_env():
     env = os.environ.copy()
     env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
     env["MPLCONFIGDIR"] = paths["matplotlib_dir"]
+    if RUNTIME_PREPARED:
+        env["SMART_SITE_RUNTIME_PREPARED"] = "1"
     os.makedirs(env["MPLCONFIGDIR"], exist_ok=True)
     return env
 
@@ -203,6 +207,8 @@ def register_shutdown_handlers():
 
 
 def launch_system():
+    global RUNTIME_PREPARED
+
     register_shutdown_handlers()
     atexit.register(cleanup_processes)
 
@@ -218,6 +224,12 @@ def launch_system():
     config = load_config()
     app_port = config["app_port"]
     min_data_rows = config["min_data_rows"]
+    archive_dir, moved_files = archive_existing_runtime_files(config)
+    RUNTIME_PREPARED = True
+
+    if moved_files:
+        print(f"\n已归档历史运行文件: {archive_dir}")
+        print(f"本次启动将从空数据状态开始，共归档 {len(moved_files)} 个文件。")
 
     print("\n[1] 启动 DRL 控制系统...")
     drl_proc = start_managed_process("DRL 控制系统", [RUNTIME_PYTHON, DRL_SCRIPT], cwd=BASE_DIR, env=child_env())
