@@ -60,6 +60,8 @@ best.pt
 python app.py
 ```
 
+如果需要指定某个虚拟环境解释器，可以先设置环境变量 `SMART_SITE_PYTHON`，否则系统会使用当前运行 `app.py` 的 Python。
+
 首次运行会先打开 Streamlit 初始化设置页面，请填写：
 
 - 施工现场视频路径

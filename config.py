@@ -6,7 +6,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 DEFAULT_OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
 DEFAULT_MODEL_PATH = os.path.join(BASE_DIR, "best.pt")
-DEFAULT_VIDEO_PATH = "/Users/nayuta/Desktop/data3.mp4"
+DEFAULT_VIDEO_PATH = ""
 DEFAULT_MIN_DATA_ROWS = 800
 DEFAULT_APP_PORT = 8502
 

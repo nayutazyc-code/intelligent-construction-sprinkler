@@ -20,8 +20,7 @@ from config import (
 )
 
 # --- 配置 ---
-PREFERRED_PYTHON = "/Users/nayuta/miniconda3/envs/dust_env/bin/python"
-RUNTIME_PYTHON = PREFERRED_PYTHON if os.path.exists(PREFERRED_PYTHON) else sys.executable
+RUNTIME_PYTHON = os.environ.get("SMART_SITE_PYTHON", sys.executable)
 DRL_SCRIPT = os.path.join(BASE_DIR, "drl_controller.py")
 DASHBOARD_SCRIPT = os.path.join(BASE_DIR, "dashboard.py")
 SERVER_START_TIMEOUT = 60
