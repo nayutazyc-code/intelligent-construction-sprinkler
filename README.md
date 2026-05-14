@@ -7,7 +7,7 @@
 - 基于 YOLO 权重文件 `best.pt` 进行施工现场视频目标检测
 - 模拟生成 PM2.5、PM10、TSP、温湿度、风速风向和喷淋状态等多源数据
 - 使用 RobustScaler 预处理与 Attention-LSTM 模型预测未来短时空气质量变化趋势
-- 支持 LSTM、BiLSTM、Attention-LSTM、CNN-BiLSTM 预测模型对比实验
+- 支持 LSTM、BiLSTM、Attention-LSTM 预测模型对比实验，默认使用 40 步历史窗口预测未来 5 步
 - 使用 DQN 强化学习算法进行关闭、低档、高档三档喷淋决策
 - 通过 Streamlit 页面实时展示监控画面、粉尘指标和喷淋状态
 

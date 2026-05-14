@@ -10,7 +10,6 @@ from sklearn.preprocessing import RobustScaler
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.layers import (
     Bidirectional,
-    Conv1D,
     Dense,
     Dropout,
     Input,
@@ -36,9 +35,9 @@ PREDICTION_COMPARISON_PLOT_FILE = PATHS["prediction_comparison_plot_file"]
 ATTENTION_HEATMAP_FILE = PATHS["attention_heatmap_file"]
 PREDICTION_PREPROCESSOR_FILE = PATHS["prediction_preprocessor_file"]
 
-SEQ_LEN = int(os.environ.get("SMART_SITE_SEQ_LEN", "20"))
-PREDICT_HORIZON_STEPS = int(os.environ.get("SMART_SITE_PREDICT_HORIZON_STEPS", "10"))
-EPOCHS = int(os.environ.get("SMART_SITE_PREDICT_EPOCHS", "80"))
+SEQ_LEN = int(os.environ.get("SMART_SITE_SEQ_LEN", "40"))
+PREDICT_HORIZON_STEPS = int(os.environ.get("SMART_SITE_PREDICT_HORIZON_STEPS", "5"))
+EPOCHS = int(os.environ.get("SMART_SITE_PREDICT_EPOCHS", "100"))
 BATCH_SIZE = int(os.environ.get("SMART_SITE_PREDICT_BATCH_SIZE", "32"))
 
 BASE_FEATURES = ["PM2.5", "PM10", "TSP", "has_dust_source"]
@@ -166,16 +165,6 @@ def build_attention_lstm(input_shape, output_size):
     return model, attention_model
 
 
-def build_cnn_bilstm(input_shape, output_size):
-    inputs = Input(shape=input_shape)
-    x = Conv1D(64, kernel_size=3, padding="same", activation="relu")(inputs)
-    x = Conv1D(64, kernel_size=3, padding="same", activation="relu")(x)
-    x = Bidirectional(LSTM(80, return_sequences=False))(x)
-    x = Dropout(0.2)(x)
-    x = Dense(96, activation="relu")(x)
-    return compile_model(Model(inputs=inputs, outputs=Dense(output_size)(x))), None
-
-
 def evaluate_predictions(y_true, y_pred, horizon_steps):
     y_true_3d = y_true.reshape(-1, horizon_steps, 3)
     y_pred_3d = y_pred.reshape(-1, horizon_steps, 3)
@@ -273,7 +262,6 @@ def main():
         ("LSTM", build_lstm),
         ("BiLSTM", build_bilstm),
         ("Attention-LSTM", build_attention_lstm),
-        ("CNN-BiLSTM", build_cnn_bilstm),
     ]
 
     metrics_rows = []
