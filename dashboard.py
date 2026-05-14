@@ -185,13 +185,20 @@ def render_dashboard():
             latest = df.iloc[-1]
 
             if stage == "control":
-                status_color = "🟢 喷淋开启" if cmd == "1" else "⚪ 系统待机"
+                status_color = {
+                    "0": "⚪ 系统待机",
+                    "1": "🟢 低档喷淋",
+                    "2": "🔵 高档喷淋",
+                }.get(cmd, "⚪ 系统待机")
                 status_placeholder.markdown(f"### 当前状态: **{status_color}**")
             pm25_metric.metric("当前 PM2.5", f"{latest['PM2.5']} μg/m³")
             pm10_metric.metric("当前 PM10", f"{latest['PM10']} μg/m³")
             tsp_metric.metric("当前 TSP", f"{latest['TSP']} μg/m³")
 
-            plot_df = df.tail(50)[['PM2.5', 'TSP']]
+            plot_columns = ['PM2.5', 'TSP']
+            if 'spray_level' in df.columns:
+                plot_columns.append('spray_level')
+            plot_df = df.tail(50)[plot_columns]
             chart_placeholder.line_chart(plot_df)
 
             frame_path = os.path.join(output_dir, "latest_frame.jpg")

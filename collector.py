@@ -11,6 +11,9 @@ from ultralytics import YOLO
 
 from config import BASE_DIR, load_config, runtime_paths
 
+if os.environ.get("SMART_SITE_SEED"):
+    np.random.seed(int(os.environ["SMART_SITE_SEED"]))
+
 # --- 基础路径配置 ---
 CONFIG = load_config()
 PATHS = runtime_paths(CONFIG)
@@ -26,6 +29,7 @@ PREVIEW_SIZE = (640, 480)
 PREVIEW_JPEG_QUALITY = 75
 PREVIEW_SAVE_INTERVAL = 3
 ANALYSIS_PLOT_FILE = PATHS["analysis_plot_file"]
+HEADLESS = os.environ.get("SMART_SITE_HEADLESS", "").lower() in {"1", "true", "yes", "on"}
 
 # --- 初始化全局变量 ---
 try:
@@ -35,31 +39,58 @@ except Exception as e:
     sys.exit()
 
 current_pm25, current_pm10, current_tsp = 15.0, 25.0, 40.0
+current_temperature, current_humidity = 24.0, 45.0
+current_wind_speed, current_wind_direction = 1.2, 90.0
+current_spray_level, current_spray_duration = 0, 0.0
 is_currently_dusty = False
+
+
+def read_spray_level():
+    if not os.path.exists(COMMAND_FILE):
+        return 0
+    try:
+        raw_value = open(COMMAND_FILE, "r").read().strip()
+        level = int(float(raw_value or "0"))
+        return int(np.clip(level, 0, 2))
+    except Exception:
+        return 0
 
 
 def mock_sensor_thread():
     global current_pm25, current_pm10, current_tsp, is_currently_dusty
+    global current_temperature, current_humidity, current_wind_speed, current_wind_direction
+    global current_spray_level, current_spray_duration
     base_pm25 = 15.0
 
     while True:
-        cannon_on = False
-        if os.path.exists(COMMAND_FILE):
-            try:
-                with open(COMMAND_FILE, "r") as f:
-                    if f.read().strip() == '1':
-                        cannon_on = True
-            except:
-                pass
+        current_spray_level = read_spray_level()
 
-        if cannon_on:
-            target_pm25 = np.random.uniform(25, 45)
-            alpha = 0.4
+        current_temperature = np.clip(current_temperature + np.random.normal(0, 0.08), -5, 42)
+        humidity_target = 70.0 if current_spray_level > 0 else 45.0
+        current_humidity += (humidity_target - current_humidity) * 0.04 + np.random.normal(0, 0.25)
+        current_humidity = np.clip(current_humidity, 15, 95)
+        current_wind_speed = np.clip(current_wind_speed + np.random.normal(0, 0.08), 0.1, 8.0)
+        current_wind_direction = (current_wind_direction + np.random.normal(0, 3.5)) % 360
+
+        if current_spray_level > 0:
+            current_spray_duration += 1.0
+        else:
+            current_spray_duration = 0.0
+
+        wind_factor = 1.0 + min(current_wind_speed, 6.0) * 0.08
+        humidity_factor = 1.0 - max(current_humidity - 45.0, 0.0) * 0.004
+
+        if current_spray_level == 2:
+            target_pm25 = np.random.uniform(18, 35)
+            alpha = 0.55
+        elif current_spray_level == 1:
+            target_pm25 = np.random.uniform(35, 60)
+            alpha = 0.32
         elif is_currently_dusty:
-            target_pm25 = np.random.uniform(180, 280)
+            target_pm25 = np.random.uniform(180, 280) * wind_factor * humidity_factor
             alpha = 0.15
         else:
-            target_pm25 = base_pm25
+            target_pm25 = base_pm25 * wind_factor * humidity_factor
             alpha = 0.2
 
         current_pm25 += (target_pm25 - current_pm25) * alpha
@@ -93,7 +124,7 @@ def save_analysis_plot():
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.savefig(ANALYSIS_PLOT_FILE)
-        print(f"\n📈 分析图已生成: {ANALYSIS_PLOT_FILE}")
+        print(f"\n分析图已生成: {ANALYSIS_PLOT_FILE}")
     except Exception as e:
         print(f"生成图表失败: {e}")
 
@@ -105,7 +136,11 @@ def main():
 
     with open(CSV_FILE, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['timestamp', 'PM2.5', 'PM10', 'TSP', 'has_dust_source'])
+        writer.writerow([
+            'timestamp', 'PM2.5', 'PM10', 'TSP', 'has_dust_source',
+            'temperature', 'humidity', 'wind_speed', 'wind_direction',
+            'spray_level', 'spray_duration'
+        ])
 
     cap = cv2.VideoCapture(VIDEO_PATH)
     if not cap.isOpened():
@@ -164,7 +199,13 @@ def main():
                         round(current_pm25, 2),
                         round(current_pm10, 2),
                         round(current_tsp, 2),
-                        int(is_currently_dusty)
+                        int(is_currently_dusty),
+                        round(current_temperature, 2),
+                        round(current_humidity, 2),
+                        round(current_wind_speed, 2),
+                        round(current_wind_direction, 2),
+                        current_spray_level,
+                        round(current_spray_duration, 1)
                     ])
                 last_record_time = curr_t
 
@@ -175,7 +216,10 @@ def main():
             cv2.putText(frame, f"PM2.5: {current_pm25:.1f}  TSP: {current_tsp:.1f}", (20, 100),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
-            debug_info = f"YOLO: {yolo_detected} | Color: {dust_ratio:.3f} | Motion: {motion:.3f}"
+            debug_info = (
+                f"YOLO: {yolo_detected} | Color: {dust_ratio:.3f} | Motion: {motion:.3f} "
+                f"| Spray: {current_spray_level}"
+            )
             cv2.putText(frame, debug_info, (20, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
             display_frame = cv2.resize(frame, PREVIEW_SIZE)
@@ -185,16 +229,17 @@ def main():
                 cv2.imwrite(temp_frame_path, display_frame,
                             [int(cv2.IMWRITE_JPEG_QUALITY), PREVIEW_JPEG_QUALITY])
                 os.replace(temp_frame_path, LATEST_FRAME_PATH)
-            cv2.imshow("Smart Site Environment Simulator", display_frame)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            if not HEADLESS:
+                cv2.imshow("Smart Site Environment Simulator", display_frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
     except KeyboardInterrupt:
         pass
     finally:
         cap.release()
-        cv2.destroyAllWindows()
+        if not HEADLESS:
+            cv2.destroyAllWindows()
         save_analysis_plot()
 
 

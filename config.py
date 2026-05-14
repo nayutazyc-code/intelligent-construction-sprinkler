@@ -113,7 +113,7 @@ def save_config(config):
 
 def runtime_paths(config=None):
     config = normalize_config(config or load_config())
-    output_dir = config["output_dir"]
+    output_dir = resolve_path(os.environ.get("SMART_SITE_OUTPUT_DIR") or config["output_dir"])
     os.makedirs(output_dir, exist_ok=True)
     return {
         "output_dir": output_dir,
@@ -123,9 +123,15 @@ def runtime_paths(config=None):
         "latest_frame_file": os.path.join(output_dir, "latest_frame.jpg"),
         "model_file": os.path.join(output_dir, "dust_attention_lstm_model.keras"),
         "prediction_plot_file": os.path.join(output_dir, "optimized_prediction.png"),
+        "prediction_metrics_file": os.path.join(output_dir, "prediction_model_metrics.csv"),
+        "prediction_comparison_plot_file": os.path.join(output_dir, "prediction_model_comparison.png"),
+        "prediction_preprocessor_file": os.path.join(output_dir, "prediction_preprocessor.pkl"),
         "attention_heatmap_file": os.path.join(output_dir, "attention_heatmap.png"),
         "analysis_plot_file": os.path.join(output_dir, "analysis_result.png"),
         "evaluation_plot_file": os.path.join(output_dir, "drl_multi_metrics_evaluation.png"),
+        "dqn_control_log_file": os.path.join(output_dir, "dqn_control_log.csv"),
+        "threshold_control_log_file": os.path.join(output_dir, "threshold_baseline_control_log.csv"),
+        "threshold_evaluation_plot_file": os.path.join(output_dir, "threshold_baseline_evaluation.png"),
         "matplotlib_dir": os.path.join(output_dir, "matplotlib"),
     }
 
@@ -139,9 +145,15 @@ def runtime_artifact_paths(config=None):
         paths["latest_frame_file"],
         paths["model_file"],
         paths["prediction_plot_file"],
+        paths["prediction_metrics_file"],
+        paths["prediction_comparison_plot_file"],
+        paths["prediction_preprocessor_file"],
         paths["attention_heatmap_file"],
         paths["analysis_plot_file"],
         paths["evaluation_plot_file"],
+        paths["dqn_control_log_file"],
+        paths["threshold_control_log_file"],
+        paths["threshold_evaluation_plot_file"],
     ]
 
 

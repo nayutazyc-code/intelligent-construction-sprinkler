@@ -5,9 +5,10 @@
 ## 功能简介
 
 - 基于 YOLO 权重文件 `best.pt` 进行施工现场视频目标检测
-- 模拟生成 PM2.5、PM10、TSP 等粉尘浓度数据
-- 使用 Attention-LSTM 模型预测空气质量变化趋势
-- 使用 DQN 强化学习算法进行喷淋开关决策
+- 模拟生成 PM2.5、PM10、TSP、温湿度、风速风向和喷淋状态等多源数据
+- 使用 RobustScaler 预处理与 Attention-LSTM 模型预测未来短时空气质量变化趋势
+- 支持 LSTM、BiLSTM、Attention-LSTM、CNN-BiLSTM 预测模型对比实验
+- 使用 DQN 强化学习算法进行关闭、低档、高档三档喷淋决策
 - 通过 Streamlit 页面实时展示监控画面、粉尘指标和喷淋状态
 
 ## 项目结构
@@ -82,6 +83,9 @@ python app.py
 - `outputs/cannon_command.txt`
 - `outputs/latest_frame.jpg`
 - `outputs/dust_attention_lstm_model.keras`
+- `outputs/prediction_preprocessor.pkl`
+- `outputs/prediction_model_metrics.csv`
+- `outputs/prediction_model_comparison.png`
 - `outputs/optimized_prediction.png`
 - `outputs/attention_heatmap.png`
 - `outputs/analysis_result.png`
